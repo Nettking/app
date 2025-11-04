@@ -1,0 +1,68 @@
+#!/usr/bin/env sh
+
+set -e
+
+BASEDIR="$(dirname "$0")"
+APP_HOME="$(cd "$BASEDIR"; pwd)"
+
+DEFAULT_JVM_OPTS="-Xmx64m -Xms64m"
+
+WRAPPER_DIR="$APP_HOME/gradle/wrapper"
+CLASSPATH="$WRAPPER_DIR/gradle-wrapper.jar"
+
+if [ ! -f "$CLASSPATH" ]; then
+  PROPERTIES_FILE="$WRAPPER_DIR/gradle-wrapper.properties"
+  if [ ! -f "$PROPERTIES_FILE" ]; then
+    echo "ERROR: Missing $PROPERTIES_FILE; cannot determine Gradle version." >&2
+    exit 1
+  fi
+
+  DISTRIBUTION_URL=$(grep '^distributionUrl=' "$PROPERTIES_FILE" | cut -d= -f2- | tr -d '\r')
+  if [ -z "$DISTRIBUTION_URL" ]; then
+    echo "ERROR: distributionUrl not defined in $PROPERTIES_FILE." >&2
+    exit 1
+  fi
+
+  VERSION=$(printf '%s\n' "$DISTRIBUTION_URL" | sed -E 's#.*/gradle-([^-]+)/?.*#\1#')
+  if [ -z "$VERSION" ]; then
+    echo "ERROR: Unable to parse Gradle version from distributionUrl=$DISTRIBUTION_URL" >&2
+    exit 1
+  fi
+
+  WRAPPER_URL="https://services.gradle.org/distributions/gradle-${VERSION}-wrapper.jar"
+  TEMP_JAR="$CLASSPATH.part"
+  DOWNLOAD_TOOL=""
+
+  if command -v curl >/dev/null 2>&1; then
+    DOWNLOAD_TOOL="curl"
+    curl -fL "$WRAPPER_URL" -o "$TEMP_JAR"
+  elif command -v wget >/dev/null 2>&1; then
+    DOWNLOAD_TOOL="wget"
+    wget -O "$TEMP_JAR" "$WRAPPER_URL"
+  else
+    echo "ERROR: Neither curl nor wget is installed to download $WRAPPER_URL" >&2
+    exit 1
+  fi
+
+  if [ ! -s "$TEMP_JAR" ]; then
+    echo "ERROR: Failed to download Gradle wrapper jar from $WRAPPER_URL using $DOWNLOAD_TOOL." >&2
+    rm -f "$TEMP_JAR"
+    exit 1
+  fi
+
+  mv "$TEMP_JAR" "$CLASSPATH"
+fi
+
+if [ -n "$JAVA_HOME" ]; then
+  if [ -x "$JAVA_HOME/bin/java" ]; then
+    JAVACMD="$JAVA_HOME/bin/java"
+  else
+    echo "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME" >&2
+    exit 1
+  fi
+else
+  JAVACMD="java"
+fi
+
+exec "$JAVACMD" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS \
+  -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
